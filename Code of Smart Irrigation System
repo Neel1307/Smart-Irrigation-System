@@ -1,0 +1,324 @@
+#include <SoftwareSerial.h>
+
+SoftwareSerial Wifi(7, 8);
+
+#include <Wire.h> 
+#include <DHT11.h>
+int pin=A0;
+DHT11 dht11(pin); 
+float temp, humi;
+int Temp_State=0;
+int Humi_State=0;
+#include <Wire.h> 
+#include <LiquidCrystal_I2C.h>
+0
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+
+int Relay_1 = 13;
+int Relay_2 = 12;
+int Relay_3 = 11;
+int Relay_4 = 10;
+
+int Buzzer = 3;
+int Led_R = 6;
+int Led_G = 5;
+
+int PIR = 4;
+int Siren = 9;
+
+int Soil_Senosr = A2;
+int Water_Level_1 = A0;
+int Water_Level_2 = A1;
+
+int Soil_Senosr_State=0;
+int Water_Level_1_State=0;
+int Water_Level_2_State=0;
+int Auto_Mode=1;
+
+int Relay_1_State=0;
+int Relay_2_State=0;
+int Relay_3_State=0;
+int Relay_4_State=0;
+int Temp_set=33;
+int count=0;     
+
+
+String inputData = "";        
+bool Data_Received = false;
+String IOT_FARMING="";
+  
+int inputDataOver=0;
+int a=0,b=0;
+
+int PIR_State=0;
+
+void setup()
+{
+  Serial.begin(9600);  
+  Wifi.begin(9600);  
+  
+  Serial.println("ShriZero@3327...");
+//  lcd.begin();
+  lcd.backlight();
+  lcd.print("  IOT Farming ");
+  lcd.setCursor(0,1); 
+  lcd.print("    System");
+  delay(2000); 
+  lcd.clear();
+
+  pinMode(Relay_1, OUTPUT);
+  pinMode(Relay_2, OUTPUT);
+  pinMode(Relay_3, OUTPUT);
+  pinMode(Relay_4, OUTPUT);
+  
+  pinMode(Buzzer, OUTPUT);
+  pinMode(Led_R, OUTPUT);
+  pinMode(Led_G, OUTPUT);
+  
+  pinMode(Soil_Senosr, INPUT);
+  pinMode(Water_Level_1, INPUT);
+  pinMode(Water_Level_2, INPUT);
+  
+  digitalWrite(Relay_1, 0);
+  digitalWrite(Relay_2, 0);
+  digitalWrite(Relay_3, 0);
+  digitalWrite(Relay_4, 0);
+  
+  digitalWrite(Buzzer, 0);
+  digitalWrite(Led_R, 1);
+  digitalWrite(Led_G, 1);
+
+  pinMode(PIR, INPUT);
+  digitalWrite(PIR, 1);
+  pinMode(Siren, OUTPUT);
+  digitalWrite(Siren, 0);
+  
+  digitalWrite(Soil_Senosr, 1);
+  digitalWrite(Water_Level_1, 1);
+  digitalWrite(Water_Level_2, 1);
+  Read_Sensor();
+//  while(1)
+//  {
+//    
+//   lcd.setCursor(0,1); 
+//   if(digitalRead(PIR)==0)digitalWrite(Relay_4, 0);
+//   if(digitalRead(PIR)==1)digitalWrite(Relay_4, 1);
+//    
+//  }
+}
+
+void loop()
+{
+    if(digitalRead(PIR)==1 && PIR_State==1)digitalWrite(Siren, 1);
+    else digitalWrite(Siren, 0);
+
+    
+    lcd.setCursor(12,0); 
+    if(digitalRead(PIR)==1)lcd.print("M");
+    if(digitalRead(PIR)==0)lcd.print("_");
+
+  
+    if(count>=250)
+    {
+      Read_Sensor();
+      lcd_Update();
+      Relay_Control();
+      App_Update();
+    }
+   
+    while (Wifi.available())
+    {
+      char inChar = (char)Wifi.read();
+      IOT_FARMING += inChar;
+      if (inChar == '\n') {
+      inputDataOver = true;
+      }
+    }
+        
+    Data_Process();
+    
+    count++;
+    delay(10);
+}
+
+void Data_Process()
+{
+  if (inputDataOver) 
+  {
+    Serial.print(IOT_FARMING);
+//    
+//    Serial.print("Test");
+//    Serial.println(IOT_FARMING[1]);
+    inputDataOver = false;
+    
+    if(IOT_FARMING[1]=='A' && IOT_FARMING[2]=='M' && IOT_FARMING[4]=='1')Auto_Mode=1;
+    if(IOT_FARMING[1]=='A' && IOT_FARMING[2]=='M' && IOT_FARMING[4]=='0')Auto_Mode=0;
+    
+    if(IOT_FARMING[1]=='P' && IOT_FARMING[2]=='s' && IOT_FARMING[4]=='1')PIR_State=1;
+    if(IOT_FARMING[1]=='P' && IOT_FARMING[2]=='s' && IOT_FARMING[4]=='0')PIR_State=0;
+
+    
+    
+    if(IOT_FARMING[1]=='R' && IOT_FARMING[2]=='1' && IOT_FARMING[4]=='0' && Auto_Mode==0)Relay_1_State=0;
+    if(IOT_FARMING[1]=='R' && IOT_FARMING[2]=='1' && IOT_FARMING[4]=='1' && Auto_Mode==0)Relay_1_State=1;
+    
+    if(IOT_FARMING[1]=='R' && IOT_FARMING[2]=='2' && IOT_FARMING[4]=='0' && Auto_Mode==0)Relay_2_State=0;
+    if(IOT_FARMING[1]=='R' && IOT_FARMING[2]=='2' && IOT_FARMING[4]=='1' && Auto_Mode==0)Relay_2_State=1;
+    
+    if(IOT_FARMING[1]=='R' && IOT_FARMING[2]=='3' && IOT_FARMING[4]=='0' && Auto_Mode==0)Relay_3_State=0;
+    if(IOT_FARMING[1]=='R' && IOT_FARMING[2]=='3' && IOT_FARMING[4]=='1' && Auto_Mode==0)Relay_3_State=1;
+    
+    if(IOT_FARMING[1]=='R' && IOT_FARMING[2]=='4' && IOT_FARMING[4]=='0')Relay_4_State=0;
+    if(IOT_FARMING[1]=='R' && IOT_FARMING[2]=='4' && IOT_FARMING[4]=='1')Relay_4_State=1;
+    
+    if(IOT_FARMING[1]=='T' && IOT_FARMING[2]=='s' && IOT_FARMING[5]=='#')
+    {Temp_set=IOT_FARMING[4]-0x30;Serial.print("Temp_set");Serial.println(Temp_set);}
+    if(IOT_FARMING[1]=='T' && IOT_FARMING[2]=='s' && IOT_FARMING[6]=='#')
+    {
+      a=IOT_FARMING[4]-0x30;
+      b=IOT_FARMING[5]-0x30;
+      Temp_set=a*10+b;  
+      Serial.print("Temp_set");Serial.println(Temp_set);
+    }
+    
+    
+    IOT_FARMING = "";
+    lcd_Update();
+    Relay_Control();
+    delay(50);
+    App_Update();
+    
+  }
+  
+}
+
+
+
+void Read_Sensor()
+{
+  int err;
+  count=0;
+  if((err=dht11.read(humi, temp))==0)
+  {
+    
+    Temp_State=temp;
+    Humi_State=humi;
+  }
+  else
+  {
+    lcd.clear();
+    lcd.print("DHT 11 Error");  
+  }
+  
+ if(digitalRead(Soil_Senosr)==0)Soil_Senosr_State=1;
+ else Soil_Senosr_State=0;
+ if(digitalRead(Water_Level_1)==0)Water_Level_1_State=1;
+ else Water_Level_1_State=0;
+ if(digitalRead(Water_Level_2)==0)Water_Level_2_State=1;
+ else Water_Level_2_State=0;
+
+ if(Auto_Mode==1)
+    {
+      if(Temp_State>Temp_set)Relay_1_State=1;
+      else Relay_1_State=0;
+      
+      if(Soil_Senosr_State==0)Relay_2_State=1;
+      else Relay_2_State=0;
+      if(Water_Level_1_State==1 && Water_Level_2_State==1)Relay_3_State=1;
+      if(Water_Level_1_State==0 && Water_Level_2_State==0)Relay_3_State=0;
+      
+    }
+   
+
+}
+
+
+
+void lcd_Update()
+{
+  lcd.clear();
+  lcd.print("T:");
+  lcd.print(Temp_State);
+  lcd.print("c ");
+  lcd.print("H:");
+  lcd.print(Humi_State);
+  lcd.print("% ");
+
+  lcd.setCursor(13,0); 
+  if(PIR_State==1)lcd.print("P");
+  else lcd.print("-");
+  lcd.print(" ");
+  if(Auto_Mode==1)lcd.print("A");
+  else lcd.print("M");
+  
+  
+  lcd.setCursor(0,1);
+  if(Soil_Senosr_State==0)lcd.print("Dry");
+  else lcd.print("Wet");
+  lcd.print(" ");
+  if(Water_Level_1_State==1 && Water_Level_2_State==1)lcd.print("W:Low");
+  else if(Water_Level_1_State==0 && Water_Level_2_State==1)lcd.print("W:Mid");
+  else if(Water_Level_1_State==0 && Water_Level_2_State==0)lcd.print("W:Ful");
+  else lcd.print("W:Err");
+
+  lcd.print("  R");
+  lcd.print(Relay_1_State);
+  lcd.print(Relay_2_State);
+  lcd.print(Relay_3_State);
+  lcd.print(Relay_4_State);
+
+  if(Water_Level_1_State==1 && Water_Level_2_State==1)
+  {digitalWrite(Buzzer, 1);digitalWrite(Led_R, 0);digitalWrite(Led_G, 1);delay(500);}
+  else{digitalWrite(Buzzer,0);digitalWrite(Led_R,1);digitalWrite(Led_G,0);}
+  
+  digitalWrite(Buzzer,0);  
+   
+}
+
+void Relay_Control()
+{
+  if(Relay_1_State==1)digitalWrite(Relay_1, 1);
+  else digitalWrite(Relay_1, 0);
+  
+  if(Relay_2_State==1)digitalWrite(Relay_2, 1);
+  else digitalWrite(Relay_2, 0);
+  
+  if(Relay_3_State==1)digitalWrite(Relay_3, 1);
+  else digitalWrite(Relay_3, 0);
+  
+  if(Relay_4_State==1)digitalWrite(Relay_4, 1);
+  else digitalWrite(Relay_4, 0);
+}
+
+void App_Update()
+{ 
+  Wifi.print("*");
+  Wifi.print(((Temp_State/10)%10));
+  Wifi.print(((Temp_State%10)));
+  Wifi.print("-");
+  Wifi.print(((Humi_State/10)%10));
+  Wifi.print(((Humi_State%10)));
+  Wifi.print("-");
+  Wifi.print(Auto_Mode);
+  Wifi.print("-"); 
+  Wifi.print(Soil_Senosr_State);
+  Wifi.print("-");
+  if(Water_Level_1_State==1 && Water_Level_2_State==1)Wifi.print('1');
+  else if(Water_Level_1_State==0 && Water_Level_2_State==1)Wifi.print('2');
+  else if(Water_Level_1_State==0 && Water_Level_2_State==0)Wifi.print('3');
+  else Wifi.print('0');
+  
+  Wifi.print("-");
+  Wifi.print(Relay_1_State);
+  Wifi.print(Relay_2_State);
+  Wifi.print(Relay_3_State);
+  Wifi.print(Relay_4_State);
+  
+  Wifi.print("-");
+  if(Soil_Senosr_State==0 || Temp_State>Temp_set || (Water_Level_1_State==1 && Water_Level_2_State==1))Wifi.print('1');
+  else Wifi.print('0');
+ 
+  Wifi.println("#");
+
+}
